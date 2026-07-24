@@ -19,6 +19,7 @@ l.Info().Str("user", "ada").Int("n", 3).Msg("request handled")
 ## Contents
 
 - [Philosophy](#philosophy)
+- [Why not `log/slog`?](#why-not-logslog)
 - [Features](#features)
 - [Install](#install)
 - [Getting started](#getting-started)
@@ -61,6 +62,41 @@ observation, so its design goals are, in order:
 
 The result is a logger that reads like `zerolog`, matches it on allocations, and
 carries none of the dependency weight.
+
+## Why not `log/slog`?
+
+Fair question — `log/slog` ships in the standard library, so it's the right
+default for many projects. Reach for slog first if any of these matter most to
+you:
+
+- **Zero third-party code, ever.** slog *is* the standard library. loggy has no
+  dependencies either, but slog adds literally nothing to your `go.mod`.
+- **The handler ecosystem.** slog's `Handler` interface has a growing set of
+  third-party backends (OpenTelemetry, cloud logging, pretty-printers). loggy
+  gives you hooks and samplers, but not that ecosystem.
+- **A standardized API** your whole team — and every tool — already knows.
+
+loggy exists for the cases where slog's trade-offs bite:
+
+- **Allocations on the hot path.** slog's ergonomic `logger.Info(msg, "k", v)`
+  form boxes every argument into `any`; even the typed-attr `LogAttrs` path
+  starts allocating past a handful of fields (7 allocs at ten fields in the
+  [benchmarks](#performance) below). loggy encodes straight into a pooled buffer
+  and allocates **zero** on every enabled *and* disabled path.
+- **Raw speed.** Roughly **2–4× faster than slog** across the suite, even with
+  slog driven through its optimized `LogAttrs` API.
+- **A chained builder that reads cleanly:**
+
+  ```go
+  l.Info().Str("user", u).Int("n", 3).Msg("done")
+  // vs
+  slog.LogAttrs(ctx, slog.LevelInfo, "done", slog.String("user", u), slog.Int("n", 3))
+  ```
+
+**Rule of thumb:** pick `slog` when stdlib-only and its handler ecosystem
+outweigh everything else; pick loggy when hot-path allocations or a lighter API
+are what you care about. The two are close enough that you won't be *wrong*
+either way — it's about which trade-off fits.
 
 ## Features
 
@@ -398,23 +434,30 @@ can't represent (`NaN`, `±Inf`) are emitted as strings.
 
 ## Performance
 
-Benchmarked against [zerolog](https://github.com/rs/zerolog) and
+Benchmarked against the standard library's
+[`log/slog`](https://pkg.go.dev/log/slog),
+[zerolog](https://github.com/rs/zerolog), and
 [zap](https://github.com/uber-go/zap), JSON to `io.Discard` (AMD Ryzen 7 7435HS,
-Go 1.25). Full suite in [`bench/`](bench):
+Go 1.25); all four from a single run. `slog` is driven through its
+allocation-optimized `LogAttrs` API, so it's shown at its fastest. Full suite in
+[`bench/`](bench):
 
-| Scenario | loggy | zerolog | zap |
-|---|---|---|---|
-| No fields | 141 ns · 0 B · 0 allocs | 118 ns · 0/0 | 243 ns · 0/0 |
-| 3 fields | 202 ns · 0 B · 0 allocs | 164 ns · 0/0 | 453 ns · 192 B/1 |
-| 10 fields | 410 ns · 0 B · 0 allocs | 343 ns · 0/0 | 818 ns · 705 B/1 |
-| Accumulated context + fields | **209 ns** · 0/0 | 229 ns · 0/0 | 493 ns · 192 B/1 |
-| Disabled + fields | **4.5 ns** · 0/0 | 7.6 ns · 0/0 | 62 ns · 192 B/1 |
-| With caller | **669 ns** | 1108 ns | 947 ns |
-| Concurrent (`WithConcurrentWriter`) | 21 ns · 0/0 | 21 ns · 0/0 | 114 ns · 128 B/1 |
+| Scenario | loggy | slog | zerolog | zap |
+|---|---|---|---|---|
+| No fields | 144 ns · 0 B · 0 allocs | 448 ns · 0/0 | 129 ns · 0/0 | 285 ns · 0/0 |
+| 3 fields | 244 ns · 0 B · 0 allocs | 678 ns · 0/0 | 210 ns · 0/0 | 512 ns · 192 B/1 |
+| 10 fields | 396 ns · 0 B · 0 allocs | 1639 ns · 448 B/7 | 354 ns · 0/0 | 828 ns · 705 B/1 |
+| Accumulated context + fields | **224 ns** · 0/0 | 646 ns · 0/0 | 292 ns · 0/0 | 552 ns · 192 B/1 |
+| Disabled + fields | **4.2 ns** · 0/0 | 15.9 ns · 0/0 | 8.4 ns · 0/0 | 77 ns · 192 B/1 |
+| With caller | **733 ns** | 1407 ns | 1171 ns | 1032 ns |
+| Concurrent (`WithConcurrentWriter`) | 23 ns · 0/0 | 99 ns · 0/0 | 18 ns · 0/0 | 132 ns · 128 B/1 |
 
-loggy allocates zero on every enabled and disabled path (matching zerolog),
-beats zap across the board, and beats zerolog on accumulated-context and
-disabled workloads.
+loggy allocates zero on every enabled and disabled path (matching zerolog), and
+runs roughly 2–4× faster than the standard library's `log/slog` across the board
+— even with slog on its optimized `LogAttrs` path. It beats zap everywhere and
+edges zerolog on the accumulated-context and disabled workloads. (slog stays
+allocation-free on most paths thanks to `LogAttrs`, but its ten-field encoding
+still costs 7 allocations.)
 
 Run them yourself:
 

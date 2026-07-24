@@ -1,11 +1,15 @@
-// Package bench compares github.com/subhanjanops/loggy against zerolog and zap.
+// Package bench compares github.com/subhanjanops/loggy against the standard
+// library's log/slog, zerolog, and zap.
 //
 // Methodology / fairness:
-//   - All three write JSON to io.Discard with a timestamp and no caller
+//   - All four write JSON to io.Discard with a timestamp and no caller
 //     (except the Caller benchmark), no sampling, no hooks.
 //   - Each scenario is a top-level Benchmark with a b.Run sub-benchmark per
-//     library, so results line up as Scenario/practice, Scenario/zerolog,
-//     Scenario/zap for direct comparison.
+//     library, so results line up as Scenario/practice, Scenario/slog,
+//     Scenario/zerolog, Scenario/zap for direct comparison.
+//   - slog is driven through Logger.LogAttrs — its documented,
+//     allocation-optimized path — so the comparison uses slog at its fastest
+//     rather than the type-inferring key/value variadic form.
 //   - Duration/float encodings differ slightly between libraries (ns int vs
 //     ms number vs float seconds); the amount of work is comparable.
 //
@@ -13,8 +17,11 @@
 package bench
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -24,6 +31,9 @@ import (
 
 	"github.com/subhanjanops/loggy"
 )
+
+// benchCtx is passed to slog.Logger.LogAttrs, which requires a context.
+var benchCtx = context.Background()
 
 var (
 	errSample = errors.New("connection refused")
@@ -47,6 +57,14 @@ func newZap(opts ...zap.Option) *zap.Logger {
 	enc := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
 	core := zapcore.NewCore(enc, zapcore.AddSync(io.Discard), zapcore.InfoLevel)
 	return zap.New(core, opts...)
+}
+
+func newSlog() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, nil)) // default level: Info
+}
+
+func newSlogOpts(o *slog.HandlerOptions) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(io.Discard, o))
 }
 
 // ---------------------------------------------------------------------
@@ -78,6 +96,14 @@ func BenchmarkNoFields(b *testing.B) {
 			l.Info("hello world")
 		}
 	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "hello world")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------
@@ -107,6 +133,15 @@ func BenchmarkSmall(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			l.Info("request handled", zap.String("method", "GET"), zap.String("path", "/api/orders"), zap.Int("status", 200))
+		}
+	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "request handled",
+				slog.String("method", "GET"), slog.String("path", "/api/orders"), slog.Int("status", 200))
 		}
 	})
 }
@@ -158,6 +193,20 @@ func BenchmarkTenFields(b *testing.B) {
 			)
 		}
 	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "event",
+				slog.String("f1", "a"), slog.String("f2", "b"),
+				slog.Int("f3", 1), slog.Int("f4", 2),
+				slog.Bool("f5", true), slog.Bool("f6", false),
+				slog.Float64("f7", 1.5), slog.Float64("f8", 2.5),
+				slog.String("f9", "c"), slog.Int("f10", 3),
+			)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------
@@ -189,6 +238,14 @@ func BenchmarkAccumulatedContext(b *testing.B) {
 			l.Info("tick")
 		}
 	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog().With(slog.String("app", "svc"), slog.String("env", "prod"), slog.Int("ver", 2))
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "tick")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------
@@ -218,6 +275,15 @@ func BenchmarkContextPlusFields(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			l.Info("handled", zap.String("method", "GET"), zap.Int("status", 200), zap.Duration("took", durSample))
+		}
+	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog().With(slog.String("app", "svc"), slog.String("env", "prod"))
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "handled",
+				slog.String("method", "GET"), slog.Int("status", 200), slog.Duration("took", durSample))
 		}
 	})
 }
@@ -252,6 +318,14 @@ func BenchmarkDisabledNoFields(b *testing.B) {
 			l.Info("dropped")
 		}
 	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlogOpts(&slog.HandlerOptions{Level: slog.LevelError})
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "dropped")
+		}
+	})
 }
 
 // ---------------------------------------------------------------------
@@ -284,6 +358,15 @@ func BenchmarkDisabledWithFields(b *testing.B) {
 			l.Info("dropped", zap.String("k", "v"), zap.Int("n", 1), zap.Bool("ok", true))
 		}
 	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlogOpts(&slog.HandlerOptions{Level: slog.LevelError})
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "dropped",
+				slog.String("k", "v"), slog.Int("n", 1), slog.Bool("ok", true))
+		}
+	})
 }
 
 // ---------------------------------------------------------------------
@@ -313,6 +396,14 @@ func BenchmarkWithCaller(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			l.Info("with caller", zap.String("k", "v"))
+		}
+	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlogOpts(&slog.HandlerOptions{AddSource: true})
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, "with caller", slog.String("k", "v"))
 		}
 	})
 }
@@ -359,6 +450,16 @@ func BenchmarkConcurrent(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
 				l.Info("m", zap.String("k", "v"), zap.Int("n", 1))
+			}
+		})
+	})
+	b.Run("slog", func(b *testing.B) {
+		l := newSlog()
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				l.LogAttrs(benchCtx, slog.LevelInfo, "m", slog.String("k", "v"), slog.Int("n", 1))
 			}
 		})
 	})
@@ -478,6 +579,15 @@ func BenchmarkFormattedMessage(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			l.Infof("done in %dms", 7)
+		}
+	})
+	b.Run("slog", func(b *testing.B) {
+		// slog has no printf-style API; the idiomatic equivalent is Sprintf.
+		l := newSlog()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			l.LogAttrs(benchCtx, slog.LevelInfo, fmt.Sprintf("done in %dms", 7), slog.Int("code", 42))
 		}
 	})
 }
