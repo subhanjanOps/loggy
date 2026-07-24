@@ -13,7 +13,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Initial release of `loggy`: a dependency-free, zero-allocation structured
   logger with a chained builder API.
 - JSON and text formats; automatic level colors on a terminal.
-- Levels: Debug, Info, Warn, Error, Fatal, Panic.
+- Five severity levels: Debug, Info, Warn, Error, Fatal. `Fatal()` and
+  `Panic()` both emit at fatal level, then exit and panic respectively.
 - `With()` child loggers with pre-encoded persistent fields.
 - `Event.Ctx` context extraction, hooks, samplers, caller and stack traces.
 - Package-level default logger (`Default`, `SetDefault`, `InfoPkg`, `ErrorPkg`).
