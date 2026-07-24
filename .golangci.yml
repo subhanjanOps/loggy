@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # `standard` = errcheck, govet, ineffassign, staticcheck, unused.
+  default: standard
+  enable:
+    - bodyclose
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+  exclusions:
+    generated: lax
+    rules:
+      # Test helpers may intentionally ignore returns / use simple constructs.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - unparam
+
+formatters:
+  enable:
+    - gofmt
