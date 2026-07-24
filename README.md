@@ -1,7 +1,6 @@
 # loggy
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/subhanjanops/loggy.svg)](https://pkg.go.dev/github.com/subhanjanops/loggy)
-[![Go Report Card](https://goreportcard.com/badge/github.com/subhanjanops/loggy)](https://goreportcard.com/report/github.com/subhanjanops/loggy)
 [![CI](https://github.com/subhanjanops/loggy/actions/workflows/ci.yml/badge.svg)](https://github.com/subhanjanops/loggy/actions/workflows/ci.yml)
 [![golangci-lint](https://img.shields.io/badge/lint-golangci--lint-blue.svg)](.golangci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
