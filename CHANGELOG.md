@@ -19,7 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Event.Ctx` context extraction, hooks, samplers, caller and stack traces.
 - Package-level default logger (`Default`, `SetDefault`, `InfoPkg`, `ErrorPkg`).
 - `WithConcurrentWriter` opt-in lock-free write path.
-- Comparative benchmark suite against zerolog and zap in `bench/`.
+- Comparative benchmark suite against the standard library's `log/slog`,
+  zerolog, and zap in `bench/`.
 
 ### Tooling
 
