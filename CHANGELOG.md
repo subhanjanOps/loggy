@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-24
+
 ### Added
 
 - Initial release of `loggy`: a dependency-free, zero-allocation structured
@@ -25,3 +27,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - golangci-lint configuration (`.golangci.yml`, v2) with the standard linters
   plus bodyclose, gocritic, misspell, revive, unconvert, and unparam; run
   against both the library and the `bench/` module.
+
+[Unreleased]: https://github.com/subhanjanops/loggy/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/subhanjanops/loggy/releases/tag/v1.0.0
