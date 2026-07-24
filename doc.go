@@ -15,10 +15,10 @@
 //
 // # Levels
 //
-// Six levels are available: Debug, Info, Warn, Error, Fatal, and Panic. Fatal
-// logs then calls os.Exit(1); Panic logs then panics with the message. The
-// active threshold is set with WithLevel or SetLevel and checked cheaply via
-// Enabled.
+// Five severity levels are available: Debug, Info, Warn, Error, and Fatal. The
+// Fatal and Panic entry points both emit at fatal level; Fatal then calls
+// os.Exit(1) and Panic then panics with the message. The active threshold is
+// set with WithLevel or SetLevel and checked cheaply via Enabled.
 //
 // # Child loggers
 //
